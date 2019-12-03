@@ -1,0 +1,638 @@
+---
+title: "MVA Case study in R: An outbreak of gastroenteritis in Stegen, Germany"
+author: "Niklas Willrich (RKI), Patrick Keating (AGES),  and Alexander Spina (AGES)"
+date: "27 February 2017"
+output: 
+  html_document: 
+      theme: simplex
+      toc: yes
+      toc_depth: 4
+      toc_float:
+        collapsed: no
+        smooth_scroll: yes
+
+---
+**Contributors to *R* code:**  
+Daniel Gardiner (PHE) and Lukas Richter (AGES)
+
+2018 "Tidyverse" version by Ashley Sharp (PHE)
+
+The following code has been adapted to *R* for learning purposes. The initial contributors are listed below. All copyrights and licenses of the original document apply here as well. 
+
+**Authors:**  
+Alain Moren and Gilles Desve
+
+**Reviewers:**  
+Marta Valenciano, Alain Moren.  
+
+**Adapted for the EPIET MVA module December**  
+**2015:** Alicia Barrasa (EPIET), Ioannis Karagiannis (UK-FETP)
+
+#Prerequisites
+Participants are expected to be familiar with data management and basic analysis in R
+
+
+#An introduction to the R companion#
+
+To understand computations in R, two slogans are helpful:
+
+- Everything that exists is an object.
+
+- Everything that happens is a function call.
+
+(John Chambers)
+
+If you look at the Global Environment panel (by default in the upper right of the screen) you will see a list of objects stored in that environment. When you load your data in R you create an object. This is completely separate from the data file itself (the excel file, or csv file etc). You can create as many objects as you like, for example you could store a few variables from your original data as a new object, or create a summary table and store that. 
+
+Functions in R are equivalent to commands in STATA. All functions take the form of a name followed by brackets e.g. functionname(). Inside the brackets go various arguments. You can access the help file for a function by calling ?functionname. The help file will show which arguments the function takes and what the function does. Arguments have a default order, as specified in the help file, though you can override this by specifying which argument you are entering using the equals sign "=".
+
+A good reference for R users is the book R for Data Science by Garrett Grolemund and Hadley Wickham. This is available free online at http://r4ds.had.co.nz/.
+
+###RStudio projects
+The easiest way to work with R is using RStudio 'projects'. RStudio is a graphical user interface that runs R in the background. A 'project' is an RStudio file that saves your workspace so you can easily pick up from where you left off. Put all the files that you will need for this case study in a folder called 'Copenhagen' and create a project in the same folder by clicking file -> new project -> existing directory, and choosing the folder. For simplicity, make sure there are no subfolders in this folder, and put all data and scripts in the main Copenhagen folder. 
+
+
+###Setting your working directory 
+Just as in STATA you can set a folder to be your working directory (using the setwd() command). Open the project that you've created and you will see that the working directory is the same as folder itself: you can check this by calling getwd().You can see what's in your working directory by looking at the **Files tab** (by default in the bottom right area of the screen). If you want to set your working directory manually you use the function setwd("C:/Users/yourname/Desktop/Copenhagen"). Note that R paths use forward slashes "/", while windows paths use back slashes "\\"  so if you copy a path from windows you have to change them manually.
+
+```{r, eval=F}
+getwd()
+# setwd("C:/Users/Spina/Desktop/MVA module 2016/Linear Regression")
+```
+
+###Installing packages and functions
+
+R packages are bundles of functions which extend the capability of R. Thousands of add-on packages are available in the main online repository (known as CRAN) and many more packages in development can be found on GitHub. They may be installed and updated over the Internet. Several packages come ready installed with R (base code). We will mainly use a combination of base R and a newer suite of packages collectively known as the 'tidyverse' www.tidyverse.org/, which share an underlying design philosophy, grammar, and data structures. You can install all the tidyverse packages with install.packages("tidyverse").
+
+You can install all the packages required for this case study using the code below. You only need to do this once.
+```{r, eval=FALSE, results='hide', message=FALSE, warning=FALSE}
+# Installing required packages for the week
+required_packages <- c("tidyverse", "Hmisc", "haven", "skimr", "visdat", "EpiStats")
+
+install.packages(required_packages)
+
+```
+
+Once a package is installed it needs to be loaded. Run the following code at the beginning of the case study to load all the packages that you need. Be sure to include it in any scripts too.
+
+Run the following code at the beginning of each of the training days to make sure that you have made available all the packages and functions that you need. Be sure to include it in any scripts too.
+
+```{r, echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+# Loading required packages for the week
+required_packages <- c("tidyverse", "Hmisc", "haven", "skimr", "visdat", "EpiStats")
+
+for (i in seq(along = required_packages))
+  library(required_packages[i], character.only = TRUE)
+```
+
+R and Stata have minor differences in default settings and methods. In this document we will follow the Stata analysis as closely as possible, but small and usually unimportant differences may be noted between the statistical findings in R and those in Stata. At some points additional steps (which would usually be optional in R) will be taken to produce output which is comparable to that of Stata.
+
+You will work with Stata.dta data sets which can be loaded into R with the "foreign" or "readstata13" packages. The appropriate functions to use will be indicated.
+
+R can hold one or many data sets in memory simultaneously, so there is usually no need to save intermediate files or close and re-open datasets.
+
+
+# Question 4. What are the main characteristics of the study population?
+# Help Q4
+Describe your dataset: frequency distributions, means, medians, modes, quartiles, SD, quartiles, outliers. Make appropriate histograms and box plots. Make sure that your missing values are properly coded as missing (i.e. as opposed to "9").
+
+### Reading in your dataset
+You can read in the Stata dataset to R using the haven package and its read_dta function.
+
+```{r}
+#Read stata file
+library(haven)
+
+tira.data <- read_dta("tirav12.dta")
+  
+#Note this variables of the class 'labelled' in order to preserve stata labels for variables and values. Best to coerce into a standard R class e.g. character, factor, numeric. You can do this using parse_character etc from the package readr (equivalent to as.character). When working with other file formats such as .csv or .tsv files you can specify the how to parse the values as they are read in using col_*() in conjunction with a read_*() function see http://r4ds.had.co.nz/data-import.html
+
+tira.data <- tira.data %>% 
+  mutate(uniquekey = parse_character(uniquekey),
+         ill = parse_factor(ill, levels = c(0,1), include_na = FALSE),
+         dateonset = parse_date(dateonset),
+         sex = parse_factor(sex, levels = c(0,1), include_na = FALSE),
+         age = parse_number(age),
+         tira = parse_factor(tira, levels = c(0,1), include_na = FALSE),
+         tportion = parse_factor(tportion, levels = c(0,1,2,3), include_na = FALSE),
+         wmousse = parse_factor(wmousse, levels = c(0,1), include_na = FALSE),
+         dmousse = parse_factor(dmousse, levels = c(0,1), include_na = FALSE),
+         mousse = parse_factor(mousse, levels = c(0,1), include_na = FALSE),
+         mportion = parse_factor(mportion, levels = c(0,1,2,3), include_na = FALSE),
+         beer = parse_factor(beer, levels = c(0,1), include_na = FALSE),
+         redjelly = parse_factor(redjelly, levels = c(0,1), include_na = FALSE),
+         fruitsalad = parse_factor(fruitsalad, levels = c(0,1), include_na = FALSE),
+         tomato = parse_factor(tomato, levels = c(0,1), include_na = FALSE),
+         mince = parse_factor(mince, levels = c(0,1), include_na = FALSE),
+         salmon = parse_factor(salmon, levels = c(0,1), include_na = FALSE),
+         horseradish = parse_factor(horseradish, levels = c(0,1), include_na = FALSE),
+         chickenwin = parse_factor(chickenwin, levels = c(0,1), include_na = FALSE),
+         roastbeef = parse_factor(roastbeef, levels = c(0,1), include_na = FALSE),
+         pork = parse_factor(pork, levels = c(0,1), include_na = FALSE)
+         )
+
+#Here we have parsed binary values as factors. In R, factors are used to work with categorical variables, variables that have a fixed and known set of possible values. They are also useful when you want to display character vectors in a non-alphabetical order. We have defined all the possible values (levels) above. We have specified that missing (NA) values should not be treated as a factor level. The package readr forces you to be explicit when defining factors. It also generates warnings when parsing failurs occur. In the below warning you see that various columns had value 9 which wasn't specified in our factor levels so was coerced to NA. You can warnings using the function problems() and providing either a data frame or a vector. https://readr.tidyverse.org/reference/parse_factor.html
+```
+
+### Browsing your dataset 
+*R studio* has the nice feature that everything is in one browser window, so you can browse your dataset and your code without having to switch between browser windows. 
+
+```{r, eval=F}
+# to browse your data, use the View command or click on the data frame in the global environment view (default top right).
+View(tira.data)
+```
+
+Alternatively, you can also view your dataset by clicking on **tira.data** in the top right "global environment" panel of your *R studio* browser.  Your global environment is where you can see all the datasets, functions and other things you have loaded in the current session. 
+
+
+### Describing your dataset 
+There are various functions in R to explore data. Some of these are listed below (some are hidden by "#")
+
+```{r eval=TRUE, message=TRUE, warning=FALSE}
+#View structure of your data set
+
+glimpse(tira.data)
+
+# skim(tira.data) #this is from the skimr package
+
+# str(tira.data)
+
+# summary(tira.data)
+```
+
+```{r}
+describe(tira.data$pork)
+
+#describe(tira.data) #this is from the Hmisc package
+```
+
+```{r}
+vis_dat(tira.data, sort_type = TRUE) #this is from the visdat package
+
+```
+
+
+```{r}
+vis_miss(tira.data)
+```
+
+
+###Summarising your data
+
+The tidyverse package dplyr is useful for manipulating data frames. http://r4ds.had.co.nz/transform.html All dplyr functions take a data frame as an argument and produce a data frame as an output. There are five key verbs with which you can accomplish many things:
+
+- select() select variables by name
+
+- filter() return rows with matching conditions
+
+- mutate() add new variables
+
+- summarise() reduce multiple values down to a single value
+
+- group_by() group by one or more variables
+
+Remember, the output of all of these is a data frame (technically dplyr uses a slightly improved version of data frames called tibbles, but they are still data frames) http://r4ds.had.co.nz/tibbles.html
+
+
+You can find a dplyr data wrangling cheat sheet along with others at
+https://www.rstudio.com/wp-content/uploads/2015/02/data-wrangling-cheatsheet.pdf
+
+and
+
+https://www.rstudio.com/resources/cheatsheets/
+
+
+dplyr also uses the pipe function **%>%** meaning you can join many functions in a row which is easy to read. The pipe takes the output of the previous function (a data frame) and inserts it as the first argument to the next function. 
+
+Here are some examples of using these functions
+
+####Select a variable
+```{r}
+select(tira.data,
+       age, sex)
+```
+
+This is the same using the pipe %>%
+```{r}
+tira.data %>% select(age, sex)
+```
+
+####Filter on a condition
+```{r}
+tira.data %>% 
+  select(age, sex) %>% 
+  filter(sex ==  "0")
+```
+
+####Mutate a new variable
+```{r}
+tira.data %>% 
+  select(age, sex) %>% 
+  mutate(over_30 = if_else(age >30, TRUE, FALSE))
+```
+
+####Summarise data
+```{r}
+tira.data %>% 
+  summarise(
+    min_age = min(age, na.rm = TRUE), 
+    median_age = median(age, na.rm = TRUE), 
+    max_age = max(age, na.rm = TRUE))
+```
+
+####Summarise grouped data
+Note: it is good practice to ungroup data afterwards
+```{r}
+tira.data %>% 
+  group_by(sex) %>%
+    summarise(
+    min_age = min(age, na.rm = TRUE), 
+    median_age = median(age, na.rm = TRUE), 
+    max_age = max(age, na.rm = TRUE)) %>%
+  ungroup()
+```
+
+You can produce counts using summarise(n())
+```{r}
+tira.data %>% 
+  group_by(sex) %>% 
+  summarise(n = n()) %>%
+  ungroup()
+```
+
+A shorthand version of this is count()
+```{r}
+tira.data %>%
+  count(sex)
+```
+
+```{r}
+tira.data %>%
+  count(ill, sex)
+```
+
+####Tidying data
+Tidy data has the following characteristics:
+
+1. Each variable forms a column.
+
+2. Each observation forms a row.
+
+3. Each type of observational unit forms a table.
+
+Often data is entered and stored in a way that is not optimal for analysis and must be tidied. See vignette for detailed discussion: https://cran.r-project.org/web/packages/tidyr/vignettes/tidy-data.html
+
+
+Two  functions from the package tidyr are useful for changing the shape of data frames from long to wide and vice versa. 
+
+- gather() takes multiple columns and collapses into key-value pairs
+
+- spread() takes a key-value pair and spreads it across multiple columns
+
+
+For example if we want to summarise the count of dateonset and sex we get teh following.
+```{r}
+tira.data %>% 
+  count(dateonset, sex)
+```
+
+####Spread data
+Using spread(), we can take the values of sex and make them column headers, filling those columns with values of n:
+```{r}
+tira.data %>% 
+  count(dateonset, sex) %>%
+  spread(key = sex, value = n)
+```
+
+####Gather data
+using gather(), we can reverse this, specifying the original column headers and ignoring dateonset, then arranging by dateonset to replicate the original table above.
+
+
+```{r}
+tira.data %>% 
+  count(dateonset, sex) %>%
+  spread(key = sex, value = n) %>%
+  gather(key = "sex", value = "n", -dateonset, na.rm = TRUE) %>%
+  arrange(dateonset)
+```
+
+You can use spread() to make two-by-two tables
+
+```{r}
+tira.data %>%
+  count(ill, sex) %>%
+  spread(key = ill, value = n)
+```
+
+You can add row totals using mutate
+
+```{r}
+tira.data %>%
+  count(ill, sex) %>%
+  spread(key = ill, value = n) %>%
+  mutate(total = `0` + `1`)
+
+```
+
+
+In the example below we look at sex, age and pork in the **tira.data** dataset.
+
+```{r}
+tira.data %>% count(sex)
+```
+
+
+### Recode the data 
+
+This can be done with recode(), if_else(), or case_when().
+
+```{r}
+tira.data %>% mutate(ill = recode(ill, "1" = "Sick"))
+```
+
+```{r}
+tira.data %>% 
+  select(sex) %>% 
+  mutate(sex2 = ifelse(sex == 1, "male", "female"))
+```
+
+```{r}
+tira.data %>% 
+  select(age) %>%
+  mutate(age_group = 
+  case_when(age < 18 ~ "child",
+            age >= 18 ~ "adult")
+)
+```
+
+
+When we imported the data the variables salmon, pork and horseradish have a few records with a value of 9. Because we parsed these as factors and defined the factor levels above, the 9's were set to NA and a warning produced. When importing from a .csv or .tsv file 
+
+```{r}
+tira.data %>% count(salmon)
+```
+
+These warnings are saved when the variable or table is created and can be viewed using the function problems(). 
+
+```{r}
+problems(tira.data$salmon)
+# problems(tira.data$pork)
+# problems(tira.data$horseradish)
+```
+
+When reading non-stata file types e.g. csv/tsv using functions such as read_csv or read_delim, it is possible to explicit column specification up front by providing a col_types argument. http://r4ds.had.co.nz/data-import.html
+
+### Create summary tables with counts and proportions 
+We can create individual tables for each variable with the following steps:
+
+
+```{r}
+tira.data %>% 
+  count(tira) %>% 
+  mutate(prop = n/sum(n))
+```
+
+```{r}
+tportion_table <- tira.data %>% 
+  count(tportion) %>% 
+  mutate(prop = n/sum(n))
+tportion_table
+```
+
+You can write files to csv using write_csv, or the generic function write_delim
+
+```{r}
+write_csv(tportion_table, "tportion_table.csv")
+
+```
+
+### Make a box plot and histogram of age
+The ggplot2 package is a powerful tool for data visualisation based on the 'grammar of graphics'. You create a plot using the function ggplot(), then add layers (also known as geoms) to the plot using "+". When you call ggplot() you need to provide your data frame as an argument. When you add a geom, you need to define the 'aesthetic mappings'. An aesthetic is a visual property of the objects in your plot. Aesthetics include things like the size, the shape, or the color of your points. More details can be found in the R for data science chapter and cheat sheet below.
+
+http://r4ds.had.co.nz/data-visualisation.html
+
+https://www.rstudio.com/wp-content/uploads/2015/03/ggplot2-cheatsheet.pdf
+
+
+You can use the following to examine the age distribution among people who attended the party, as well as only those who fell ill and additionally to save the chart.
+
+Age distribution of cohort
+```{r}
+ggplot(tira.data) + geom_histogram(aes(x = age), binwidth = 5)
+```
+
+Age distribution of cases
+```{r}
+age_cases <- ggplot(tira.data %>% filter(ill == "1")) + geom_histogram(aes(x = age), binwidth = 5)
+
+age_cases
+```
+`
+
+You can write a plot to disk using ggsave() and specifying a file name and graphics device
+```{r}
+ggsave("age_cases.jpeg", age_cases, device = "jpeg")
+```
+
+
+If we believe that there are two identifiable age groups, then we can create a new age group variable using one of the following approaches:
+
+```{r}
+# by using if_else (similar to Excel if statements)
+tira.data <- tira.data %>% mutate(agegroup = if_else(age >= 30, "1", "0"))
+tira.data %>% select(age, agegroup)
+```
+```{r, eval = FALSE}
+# Three alternative approaches
+# The below are particularly useful when you want to create more than 2 categories
+# by using cut (levels start at 1, so we have to subtract 1)
+tira.data <- tira.data %>% 
+  mutate(agegroup = cut(tira.data$age, c(0,30,150), labels = FALSE) - 1)
+
+# by using case_when()
+tira.data <- tira.data %>% 
+  select(age) %>%
+  mutate(agegroup = 
+  case_when(age < 30 ~ "0",
+            age >= 30 ~ "1")
+)
+
+# by using findInterval (levels start at 1, so we have to subtract 1)
+tira.data <- tira.data %>% 
+  mutate(agegroup <- findInterval(tira.data$age, c(0,30,150)) - 1)
+
+```
+
+
+### Describe the outbreak in terms of person and time
+You can produce summary tables by person and time using dplyr verbs.
+
+```{r}
+tira.data %>% 
+  count(sex) %>% 
+  mutate(prop = n/sum(n))
+```
+
+```{r}
+tira.data %>% 
+  count(agegroup) %>% 
+  mutate(prop = n/sum(n))
+```
+
+```{r}
+tira.data %>% 
+  summarise(
+    min_age = min(age, na.rm = TRUE), 
+    mean_age = mean(age, na.rm = TRUE), 
+    median_age = median(age, na.rm = TRUE), 
+    max_age = max(age, na.rm = TRUE))
+```
+
+```{r}
+tira.data %>% 
+  count(ill) %>% 
+  mutate(prop = n/sum(n))
+```
+
+```{r}
+tira.data %>% 
+  count(dateonset) %>% 
+  mutate(prop = n/sum(n))
+```
+
+
+# Question 5:  What is/are the vehicle/s for this outbreak?
+### a) Compute food-specific attack rates and % of cases exposed
+### b) Choose the appropriate measure of association and the appropriate statistical tests and appropriate level of confidence: 
+### c) Look at the proportion of cases exposed. What would be your suspected food item at this point?
+### d) Compute the proportion of cases exposed for each exposure
+
+## Help questions 5a to d
+
+As we are carrying out a cohort study, the appropriate measure of association is relative risk. The appropriate statistical test for determining a p-value is a Chi2 test of comparison of proportions (if large enough sample size). For our analyses we will use a 95% confidence level, as this is the standard used in public health.
+
+The outputs required for a, c and d are provided by the same function as described below. In Stata, we would normally use the **cstable** and **csinter** commands to calculate food-specific attack rates and the proportion of cases exposed to specific exposures. R versions of cctable and ccinter are now available from the EpiStats package (developed by Jean Pierre Decorps and Esther Kissling from Epiconcept). 
+
+
+####cstable
+Univariable analysis
+```{r}
+vars <- c("tira", "wmousse", "dmousse", "mousse", "beer", "redjelly", "fruitsalad", "tomato", "mince", "salmon", "horseradish", "chickenwin", "roastbeef", "pork")
+
+results <- cstable(as.data.frame(tira.data), cases = "ill", exposure = vars)
+results$df
+
+#Note: first convert from tibble to traditional data frame using as.data.frame()
+```
+
+
+To calculate attack rates for age and sex, you can use the attack.rate function. 
+
+```{r}
+tira.data %>% 
+  count(sex, ill) %>%
+  spread(key = ill, value = n) %>%
+  mutate(total = `0` + `1`,
+         attack_rate = round(`1`/total, 2))
+```
+
+```{r}
+tira.data %>% 
+  count(agegroup, ill) %>%
+  spread(key = ill, value = n) %>%
+  mutate(total = `0` + `1`,
+         attack_rate = round(`1`/total, 2))
+```
+
+
+### e) Search for any dose response if appropriate
+Use the variable tportion and tabulate it. Consider whether you would recode this variable so it has fewer categories, and actually do it. 
+
+
+```{r}
+tira.data %>% 
+  count(tportion, ill) %>%
+  spread(key = ill, value = n) %>%
+  mutate(total = `0` + `1`,
+         attack_rate = round(`1`/total, 2))
+```
+
+```{r}
+# Recode 3 portions of tportion as 2 portions
+# Make a new variable called tportion2 that has the same values as tportion
+
+tira.data <- tira.data %>% mutate(tportion2 = recode(tportion, "3" = "2"))
+tira.data %>% select(tportion, tportion2)
+```
+
+
+```{r}
+# Calculate counts, proportions and sum of recoded tportion2
+tira.data %>% 
+  count(tportion2, ill) %>%
+  spread(key = ill, value = n) %>%
+  mutate(total = `0` + `1`,
+         attack_rate = round(`1`/total, 2))
+```
+
+Here you should be able to see that those who ate 2 or more portions of tiramisu have a higher attack rate than those that ate only 1 portion of tiramisu. Those who ate 1 portion of tiramisu have a higher attack rate than those who ate no tiramisu.
+
+### f) Interpret the results and identify the outbreak vehicle if any.
+Refer to the results of the single variable analysis output and identify likely vehicles.
+
+Several food items seemed to be associated with the occurrence of illness; tiramisu, dark and white chocolate mousse, fruit salad, and red jelly. They can potentially explain up to 94, 76, 49, 46, and 45 of the 103 cases respectively. Investigators decided to identify their respective role in the occurrence of illness.
+
+From the crude analysis, epidemiologists noticed that the occurrence of gastroenteritis was lower among those attendants who had drunk beer. They also decided to assess if beer had a protective effect on the occurrence of gastroenteritis.
+
+# Question 6:  How would you assess if the chocolate mousses were the vehicles of the illness?
+
+# Question 7. How would you assess if beer had a protective effect on the occurrence of illness?
+## Help questions 6 and 7
+
+#####csinter
+The univivariable analysis (cstable) above identified variables which are potential effect modifiers and confounders. 
+
+Stratify key exposure variables by exposure to tiramisu. We will use exposure to **wmousse** stratified by tiramisu as an example of the steps required and then run a loop over all variables of interest. 
+
+```{r}
+#Note: currently EpiStats requires that you first convert from tibble to traditional data frame using as.data.frame(), and convert from factor to numeric variables using mutate_at() and parse_number().
+
+tira.data.numeric <- as.data.frame(tira.data %>% mutate_at(c(vars, "ill"), .funs = funs(parse_number)))
+  
+results <- csinter(tira.data.numeric, "ill", "wmousse", by = "tira")
+```
+
+Note: these results are printed as a list. You can select individual parts of the list using subsetting.
+
+- Cross table
+```{r}
+crosstab <- results$df1
+crosstab
+```
+
+- Statistics
+```{r}
+stats <- results$df2
+stats
+```
+
+
+Have a look at the association between beer and the illness. By stratifying the analysis on tiramisu consumption we can measure the potential protective effect of beer among those who ate tiramisu.   It seems that consumption of beer may reduce the effect of tiramisu consumption on the occurrence of gastroenteritis. The RR does not significantly differ between the two strata (0.8 vs. 1.0 and confidence intervals overlap). But, effect modification may be present. A similar stratification was conducted assessing dose response for tiramisu consumption among beer drinkers and no-beer drinkers.
+
+
+```{r}
+results <- csinter(tira.data.numeric, "ill", "beer", by = "tira")
+```
+
+Note: these results are printed as a list. You can select individual parts of the list using subsetting.
+
+- Cross table
+```{r}
+crosstab <- results$df1
+crosstab
+```
+
+
+After stratifying beer consumption by the amount of tiramisu consumed, it appeared that beer consumption reduced the effect of tiramisu on the occurrence of gastroenteritis only among those who had eaten an average amount of tiramisu. This is suggesting that, if the amount of tiramisu was large, consumption of beer no longer reduced the risk of illness when eating tiramisu.
+
+How would you proceed with your analysis?

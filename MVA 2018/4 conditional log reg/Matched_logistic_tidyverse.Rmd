@@ -1,0 +1,231 @@
+---
+title: "An outbreak of Cryptosporidium parvumin, the Principality of Monaco"
+author: "Patrick Keating, Niklas Willrich and Alexander Spina"
+date: "1 March 2017"
+output: 
+  html_document: 
+      theme: simplex
+      toc: yes
+      toc_depth: 4
+      toc_float:
+        collapsed: no
+        smooth_scroll: yes
+---
+**Contributors to *R* code:**  
+Daniel Gardiner (PHE) Lukas Richter (AGES)
+
+2018 "Tidyverse" version by Ashley Sharp (PHE)
+
+The following code has been adapted to *R* for learning purposes. The initial contributors are listed below. All copyrights and licenses of the original document apply here as well. 
+
+**Authors:**  
+Ioannis Karagiannis (PHE), Alicia Barrasa (EPIET) and André Charlett (PHE)
+
+**Adapted for the EPIET MVA module**  
+
+* **2016:** Alicia Barrasa (EPIET), Ioannis Karagiannis (PHE), Christopher Williams (EPIET and Public Health Wales-PHW): The mathematical representation of the model has been added
+
+* **2017:** Alicia Barrasa (EPIET), André Charlett (PHE) and Christopher Williams (EPIET and Public Health Wales-PHW): Tasks were rephrased into questions to reflect real life scenarios (rather than academic exercise)
+
+#An introduction to the R companion#
+
+To understand computations in R, two slogans are helpful:
+
+- Everything that exists is an object.
+
+- Everything that happens is a function call.
+
+(John Chambers)
+
+If you look at the Global Environment panel (by default in the upper right of the screen) you will see a list of objects stored in that environment. When you load your data in R you create an object. This is completely separate from the data file itself (the excel file, or csv file etc). You can create as many objects as you like, for example you could store a few variables from your original data as a new object, or create a summary table and store that. 
+
+Functions in R are equivalent to commands in STATA. All functions take the form of a name followed by brackets e.g. functionname(). Inside the brackets go various arguments. You can access the help file for a function by calling ?functionname. The help file will show which arguments the function takes and what the function does. Arguments have a default order, as specified in the help file, though you can override this by specifying which argument you are entering using the equals sign "=".
+
+A good reference for R users is the book R for Data Science by Garrett Grolemund and Hadley Wickham. This is available free online at http://r4ds.had.co.nz/.
+
+###RStudio projects
+The easiest way to work with R is using RStudio 'projects'. RStudio is a graphical user interface that runs R in the background. A 'project' is an RStudio file that saves your workspace so you can easily pick up from where you left off. Put all the files that you will need for this case study in a folder called 'Copenhagen' and create a project in the same folder by clicking file -> new project -> existing directory, and choosing the folder. For simplicity, make sure there are no subfolders in this folder, and put all data and scripts in the main Copenhagen folder. 
+
+
+###Setting your working directory 
+Just as in STATA you can set a folder to be your working directory (using the setwd() command). Open the project that you've created and you will see that the working directory is the same as folder itself: you can check this by calling getwd().You can see what's in your working directory by looking at the **Files tab** (by default in the bottom right area of the screen). If you want to set your working directory manually you use the function setwd("C:/Users/yourname/Desktop/Copenhagen"). Note that R paths use forward slashes "/", while windows paths use back slashes "\\"  so if you copy a path from windows you have to change them manually.
+
+```{r, eval=F}
+getwd()
+
+# setwd("C:/Users/Spina/Desktop/MVA module 2016/Linear Regression")
+```
+
+###Installing packages and functions
+
+R packages are bundles of functions which extend the capability of R. Thousands of add-on packages are available in the main online repository (known as CRAN) and many more packages in development can be found on GitHub. They may be installed and updated over the Internet. Several packages come ready installed with R (base code). We will mainly use a combination of base R and a newer suite of packages collectively known as the 'tidyverse' www.tidyverse.org/, which share an underlying design philosophy, grammar, and data structures. You can install all the tidyverse packages with install.packages("tidyverse").
+
+You can install all the packages required for this case study using the code below. You only need to do this once.
+
+```{r, eval=FALSE, results='hide', message=FALSE, warning=FALSE}
+# Installing required packages for this case study
+required_packages <- c("survival", "epiDisplay", "broom", "haven", "skimr", "EpiStats", "tidyverse")
+install.packages(required_packages)
+```
+
+Run the following code at the beginning of each of the training days to make sure that you have made available all the packages that you need. Be sure to include it in any scripts too.  
+```{r, echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+# Loading required packages for this case study
+required_packages <- c("survival", "epiDisplay", "broom", "haven", "skimr", "EpiStats", "tidyverse")
+
+for (i in seq(along = required_packages))
+  library(required_packages[i], character.only = TRUE)
+```
+
+
+# Conditional logistic regression
+
+### Question 3: What are the odds of exposure in the cases and controls? Which food item(s) are associated with illness? Which ones do you think could be the vehicle of infection?
+
+### Question 4: Are odds ratios appropriate for measuring the association in this study? What would be the limitations? 
+
+#### Help questions 3 and 4
+
+Read in the monaco.dta dataset
+
+```{r, eval = TRUE}
+monaco.data <- read_dta("monaco.dta")
+#Note this variables of the class 'labelled' in order to preserve stata labels for variables and values. Best to coerce into a standard R class e.g. character, factor, numeric. You can do this using parse_character etc from the package readr (equivalent to as.character). When working with other file formats such as .csv or .tsv files you can specify the how to parse the values as they are read in using col_*() in conjunction with a read_*() function. http://r4ds.had.co.nz/data-import.html
+
+
+monaco.data <- monaco.data %>% 
+  mutate(case = parse_factor(case, levels = c(0,1), include_na = FALSE),
+         age = parse_number(age),
+         sex = parse_factor(sex, levels = c(1,2), include_na = FALSE), 
+         sauce = parse_factor(sauce, levels = c(0,1), include_na = FALSE),
+         cream = parse_factor(cream, levels = c(0,1), include_na = FALSE),
+         soyamilk = parse_factor(soyamilk, levels = c(0,1), include_na = FALSE),
+         rawbstk = parse_factor(rawbstk, levels = c(0,1), include_na = FALSE),
+         strata = parse_character(strata))
+
+#Here we have parsed binary values as factors. In R, factors are used to work with categorical variables, variables that have a fixed and known set of possible values. They are also useful when you want to display character vectors in a non-alphabetical order. We have defined all the possible values (levels) above. We have specified that missing (NA) values should not be treated as a factor level. The package readr forces you to be explicit when defining factors.
+```
+
+First, view the structure of your dataset.  
+
+```{r, eval = FALSE}
+skim(monaco.data)
+#str(monaco.data)
+#summary(monaco.data)
+#describe(monaco.data)
+```
+
+You will have seen that sex is coded 1 and 2. For further analysis, it will be more convenient if sex is coded as 0 and 1.  We can do this with the forcats package, a tidyverse package dedicated to handling factors (all forcats functions start with fct_) http://r4ds.had.co.nz/factors.html
+
+```{r}
+monaco.data <- monaco.data %>% mutate(sex = fct_recode(sex, "0" = "1", "1" = "2"))
+levels(monaco.data$sex)
+```
+
+
+You can now create two-by-two tables for each exposure variable and the outcome.  
+```{r}
+monaco.data %>% count(sex, case) %>% spread(key = case, value = n)
+```
+
+```{r}
+monaco.data %>% count(sauce, case) %>% spread(key = case, value = n)
+```
+
+```{r}
+monaco.data %>% count(cream, case) %>% spread(key = case, value = n)
+```
+
+```{r}
+monaco.data %>% count(soyamilk, case) %>% spread(key = case, value = n)
+```
+
+```{r}
+monaco.data %>% count(rawbstk, case) %>% spread(key = case, value = n)
+```
+
+
+##### Calculate the odds of exposures in the cases and controls
+######cctable
+For this we can use the cctable function from EpiStats package (developed by Jean Pierre Decorps and Esther Kissling from Epiconcept). 
+
+```{r}
+vars <- c("sex", "sauce", "cream", "soyamilk", "rawbstk")
+
+results <- cctable(as.data.frame(monaco.data), cases = "case", exposure = vars)
+results$df
+```
+
+These odds ratios are appropriate for an unmatched case-control study. However, in this case, investigators decided to go for a matched case-control design. As you already know, this is not an appropriate way of presenting results and might lead to your frontline’s justified disappointment.
+
+Matching eliminates the original confounding, but in a matched design controls are no longer representative of the source population as they were selected according to matching criteria. This makes cases and controls more alike, and so ignoring the match in your analysis will usually result in OR estimates which are closer to 1 than they ought to be. 
+
+
+
+### Question 5: For the suspected food items, what is the magnitude of the associations according to your matched case-control study? How do these compare with the OR you obtained in Question 3?
+
+#### Help Q5
+For univariate analysis in a matched case-control study, the best available function to use when your data is in individual format (one case or control per observation) is **matchTab** from the epiDisplay package. For this function to work, we need to run the **attach** function, which will allow us to refer to variables directly without the need of specifying the data frame each time.  
+
+```{r}
+#matchTab requires us to convert from factor to numeric variables using parse_number()
+
+vars <- c("sex", "sauce", "cream", "soyamilk", "rawbstk")
+
+monaco.data.numeric <- as.data.frame(monaco.data %>% mutate_at(c(vars, "case"), .funs = funs(parse_number)))
+
+#matchTab requires the data frame to be attached to the R search path (this means that the database is searched by R when evaluating a variable, so objects in the database can be accessed by simply giving their names).
+attach(monaco.data.numeric)
+
+# matchTab requires the outcome variable, the exposure variable and stratifying variable in that order
+matchTab(case, sauce, strata)
+```
+
+```{r, eval=F}
+# Inadequate discordant pairs. Odds ratio not computed
+matchTab(case, cream, strata) 
+```
+
+```{r}
+matchTab(case, soyamilk, strata)
+```
+
+```{r}
+matchTab(case, rawbstk, strata)
+```
+
+If each of the above elements was assigned to an object e.g. a  <- matchTab(case, sauce, strata) it would be possible to easily export the key results of the output.
+
+
+### Question 6: How would you determine whether these food items are independently associated with illness in this outbreak? (i.e. which are main effects, and which might be confounded?)
+
+#### Help Q6
+Prior to creating the model, we need to create a new dataset which does not contain NAs in any of the variables of interest.  
+
+```{r}
+# Drop observations with missing data using the function drop_na and listing all the variables for which the missing values will be dropped.
+
+monaco.data.new <- monaco.data.numeric %>% 
+  drop_na(case, age, sex, sauce, cream, soyamilk, rawbstk, strata)
+```
+
+The function **clogit** is the equivalent of glm with log link when dealing with matched case-control studies. Notice that we need to add the stratifying variable.  
+
+```{r}
+# Run a conditional logistic model with the main exposures of interest
+cmodel1 <- clogit(case ~ sauce + cream + soyamilk + 
+                         rawbstk + strata(strata),
+                       data = monaco.data.new)
+
+cmodel1op <- tidy(cmodel1, exponentiate = TRUE)
+cmodel1op
+```
+
+Discuss the results in plenary. Can you identify confounding? How do you interpret your results? How would you describe the model?   
+
+log(odds[illness]) = $β_1x_1 + β_2x_2 +...+ β_nx_n$  
+odds[illness] = $exp(β_1x_1)*exp(β_2x_2)*...*exp(β_nx_n)$  
+odds[illness] = $exp(β_1*sauce)*exp(β_2*cream)* exp(β_3*soyamilk)*exp(β_4*rawstk)$  
+
+Where the different exp(β) are the ORs.  
+Note the **lack of a constant term**. The coefficients are the change in log odds conditional on a change in the exposure term.

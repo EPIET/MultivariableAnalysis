@@ -1,0 +1,520 @@
+---
+title: "MVA Case study Linear Regression in R: Spanish Sentinel surveillance system Factors associated
+  with HIV infection in Spain"
+author: "Alexander Spina (AGES), Patrick Keating (AGES)"
+date: "14 February 2017"
+output: 
+  html_document: 
+      theme: simplex
+      toc: yes
+      toc_depth: 4
+      toc_float:
+        collapsed: no
+        smooth_scroll: yes
+---
+**Contributors to *R* code:**  
+Niklas Willrich (RKI), Daniel Gardiner (PHE), Lukas Richter (AGES)
+
+2018 "Tidyverse" version by Ashley Sharp (PHE)
+
+The following code has been adapted to *R* for learning purposes. The initial contributors are listed below.  
+All copyrights and licenses of the original document apply here as well. 
+
+**Authors:**  
+Alicia Barrasa, Costas Danis, Manuel Dehnert, Johannes Dreesman, Matthias an der Heiden, Harold No?l-Placidoux, Ioannis Karagiannis and David Prieto  
+**Reviewers:**  
+Marta Valenciano, Alain Moren.  
+
+**Adapted for the EPIET MVA module December**  
+**2015:** Alicia Barrasa (EPIET), Ioannis Karagiannis (UK-FETP) and Irina Czogiel (PAE)
+**2017** Alicia Barrasa (EPIET) and Irina Czogiel (RKI) 
+
+
+
+#An introduction to the R companion#
+
+To understand computations in R, two slogans are helpful:
+
+- Everything that exists is an object.
+
+- Everything that happens is a function call.
+
+(John Chambers)
+
+If you look at the Global Environment panel (by default in the upper right of the screen) you will see a list of objects stored in that environment. When you load your data in R you create an object. This is completely separate from the data file itself (the excel file, or csv file etc). You can create as many objects as you like, for example you could store a few variables from your original data as a new object, or create a summary table and store that. 
+
+Functions in R are equivalent to commands in STATA. All functions take the form of a name followed by brackets e.g. functionname(). Inside the brackets go various arguments. You can access the help file for a function by calling ?functionname. The help file will show which arguments the function takes and what the function does. Arguments have a default order, as specified in the help file, though you can override this by specifying which argument you are entering using the equals sign "=".
+
+A good reference for R users is the book R for Data Science by Garrett Grolemund and Hadley Wickham. This is available free online at http://r4ds.had.co.nz/.
+
+###RStudio projects
+The easiest way to work with R is using RStudio 'projects'. RStudio is a graphical user interface that runs R in the background. A 'project' is an RStudio file that saves your workspace so you can easily pick up from where you left off. Put all the files that you will need for this case study in a folder called 'Copenhagen' and create a project in the same folder by clicking file -> new project -> existing directory, and choosing the folder. For simplicity, make sure there are no subfolders in this folder, and put all data and scripts in the main Copenhagen folder. 
+
+###Setting your working directory 
+Just as in STATA you can set a folder to be your working directory (using the setwd() command). Open the project that you've created and you will see that the working directory is the same as folder itself: you can check this by calling getwd().You can see what's in your working directory by looking at the **Files tab** (by default in the bottom right area of the screen). If you want to set your working directory manually you use the function setwd("C:/Users/yourname/Desktop/Copenhagen"). Note that R paths use forward slashes "/", while windows paths use back slashes "\\"  so if you copy a path from windows you have to change them manually.
+
+```{r, eval=F}
+getwd()
+
+# setwd("C:/Users/Spina/Desktop/MVA module 2016/Linear Regression")
+```
+
+
+###Installing packages and functions
+
+R packages are bundles of functions which extend the capability of R. Thousands of add-on packages are available in the main online repository (known as CRAN) and many more packages in development can be found on GitHub. They may be installed and updated over the Internet. Several packages come ready installed with R (base code). We will mainly use a combination of base R and a newer suite of packages collectively known as the 'tidyverse' www.tidyverse.org/, which share an underlying design philosophy, grammar, and data structures. You can install all the tidyverse packages with install.packages("tidyverse").
+
+You can install all the packages required for this case study using the code below. You only need to do this once.
+
+```{r, eval=FALSE, results='hide', message=FALSE, warning=FALSE}
+#Installing required packages for this case study
+required_packages <- c("broom", "haven", "skimr", "tidyverse", "visdat")
+install.packages(required_packages)
+```
+
+Once a package is installed it needs to be loaded. Run the following code at the beginning of the case study to load all the packages that you need. Be sure to include it in any scripts too.  
+
+```{r, echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+# Loading required packages for the case study
+required_packages <- c("broom", "haven", "skimr", "tidyverse", "visdat")
+
+for (i in seq(along = required_packages)){
+  library(required_packages[i], character.only = TRUE)
+}
+```
+
+R and Stata have minor differences in default settings and methods. In this document we will follow the Stata analysis as closely as possible, but small and usually unimportant differences may be noted between the statistical findings in R and those in Stata (e.g. in the 95% confidence intervals obtained in regression models). At some points additional steps (which would usually be optional in R) will be taken to produce output which is comparable to that of Stata.  
+
+You will work with Stata.dta data sets which can be loaded into R with the "haven" or "foreign" packages. The appropriate functions to use will be indicated. R can hold one or many data sets in memory simultaneously, so there is usually no need to save intermediate files or close and re-open datasets.  
+
+
+\pagebreak 
+
+#Get familiar with your data and perform descriptive analysis 
+
+**Question 1:** What are the main characteristics of the study population?  
+
+**Question 2:**  What is the incidence of seroconversion overall and by the different characteristics?  
+
+**Question 3:** Discuss the magnitude of the incidence of seroconversion.  
+
+
+##Help questions 1-3
+
+Start a new R script, name it **Linear.r** and save it in your working directory.  
+Write all commands in the R script so that you can run (and re-run) it when 
+
+### Reading in datasets
+You can read in the Stata data set using the haven package and it's read_dta function. 
+
+```{r}
+#Read stata file
+hiv.data <- read_dta("HIV.dta")
+#Note this variables of the class 'labelled' in order to preserve stata labels for variables and values. Best to coerce into a standard R class e.g. character, factor, numeric. You can do this using parse_character etc from the package readr (equivalent to as.character). When working with other file formats such as .csv or .tsv files you can specify the how to parse the values as they are read in using col_*() in conjunction with a read_*() function. http://r4ds.had.co.nz/data-import.html
+
+hiv.data <- hiv.data %>% 
+  mutate(age2 = parse_character(age2),
+         centro = parse_character(centro),
+         centrocod = parse_character(centrocod),
+         hete = parse_character(hete),
+         idu = parse_character(idu), 
+         lasttestYgr = parse_character(lasttestYgr),
+         msm = parse_character(msm),
+         seroco = parse_character(seroco),
+         sex = parse_character(sex),
+         sexwork = parse_character(sexwork),
+         id = parse_character(id),
+         dob = parse_date(dob),
+         first_pos = parse_date(first_pos),
+         first_test = parse_date(first_test),
+         last_neg = parse_date(last_neg),
+         age = parse_number(age),
+         cd4 = parse_number(cd4),
+         lasttestY = parse_number(lasttestY))
+
+#Here we have parsed variables as characters, numbers and vectors. We could have also specified the characters as factors. In R, factors are used to work with categorical variables, variables that have a fixed and known set of possible values. They are also useful when you want to display character vectors in a non-alphabetical order.
+
+#Alternative using foreign package
+#hiv.data2016 <- read.dta("HIV2016.dta", convert.factors = FALSE)
+#also available is the readstata13 package
+```
+
+Note if the data is stored in the same working directory (folder) as the project you are working in, you don't need to define the whole path to data, just the file name. If you want to load data stored in a different location you would need to define the whole path e.g. "C:/Users/Spina/Desktop/MVA module 2016/Linear Regression/HIV.dta"
+
+### Browsing your dataset 
+
+There are various functions in R to explore data. Some of these are listed below (some are hidden by "#")
+
+```{r eval=TRUE, message=TRUE, warning=FALSE}
+#View structure of your data set
+
+skim(hiv.data) #this is from the skimr package
+
+# str(hiv.data)
+
+# summary(hiv.data)
+
+# describe(hiv.data) #this is from the Hmisc package
+
+```
+
+```{r}
+vis_dat(hiv.data, sort_type = TRUE) #this is from the visdat package
+
+```
+
+
+```{r}
+vis_miss(hiv.data)
+```
+
+
+###Summarising your data
+
+The tidyverse package dplyr is useful for manipulating data frames. http://r4ds.had.co.nz/transform.html All dplyr functions take a data frame as an argument and produce a data frame as an output. There are five key verbs with which you can accomplish many things:
+
+- select() select variables by name
+
+- filter() return rows with matching conditions
+
+- mutate() add new variables
+
+- summarise() reduce multiple values down to a single value
+
+- group_by() group by one or more variables
+
+Remember, the output of all of these is a data frame (technically dplyr uses a slightly improved version of data frames called tibbles, but they are still data frames) http://r4ds.had.co.nz/tibbles.html
+
+
+You can find a dplyr data wrangling cheat sheet along with others at
+https://www.rstudio.com/wp-content/uploads/2015/02/data-wrangling-cheatsheet.pdf
+
+and
+
+https://www.rstudio.com/resources/cheatsheets/
+
+
+
+dplyr also uses the pipe function **%>%** meaning you can join many functions in a row which is easy to read. The pipe takes the output of the previous function (a data frame) and inserts it as the first argument to the next function. 
+
+Here are some examples of using these functions
+
+####Select a variable
+```{r}
+select(hiv.data,
+       age, sex)
+```
+
+This is the same using the pipe %>%
+```{r}
+hiv.data %>% select(age, sex)
+```
+
+####Filter on a condition
+```{r}
+hiv.data %>% 
+  select(age, sex) %>% 
+  filter(sex ==  "0")
+```
+
+####Mutate a new variable
+```{r}
+hiv.data %>% 
+  select(age, sex) %>% 
+  mutate(over_30 = if_else(age >30, TRUE, FALSE))
+```
+
+####Summarise data
+```{r}
+hiv.data %>% 
+  summarise(min_age = min(age), mean_age = mean(age), max_age = max(age))
+```
+
+####Summarise grouped data
+Note: it is good practice to ungroup data afterwards
+```{r}
+hiv.data %>% 
+  group_by(sex) %>%
+  summarise(min_age = min(age), mean_age = mean(age), max_age = max(age)) %>%
+  ungroup()
+```
+
+You can produce counts using summarise(n())
+```{r}
+hiv.data %>% 
+  group_by(sex) %>% 
+  summarise(n = n()) %>%
+  ungroup()
+```
+
+A shorthand version of this is count()
+```{r}
+hiv.data %>%
+  count(sex)
+```
+
+
+####Tidying data
+Tidy data has the following characteristics:
+
+1. Each variable forms a column.
+
+2. Each observation forms a row.
+
+3. Each type of observational unit forms a table.
+
+Often data is entered and stored in a way that is not optimal for analysis and must be tidied. See vignette for detailed discussion: https://cran.r-project.org/web/packages/tidyr/vignettes/tidy-data.html
+
+
+Two  functions from the package tidyr are useful for changing the shape of data frames from long to wide and vice versa. 
+
+- gather() takes multiple columns and collapses into key-value pairs
+
+- spread() takes a key-value pair and spreads it across multiple columns
+
+
+For example if we want to summarise the count of year of last test and sex we get teh following.
+```{r}
+hiv.data %>% 
+  count(lasttestY, sex)
+```
+
+####Spread data
+Using spread(), we can take the values of sex and make them column headers, filling those columns with values of n:
+```{r}
+hiv.data %>% 
+  count(lasttestY, sex) %>%
+  spread(key = sex, value = n)
+```
+
+####Gather data
+using gather(), we can reverse this, specifying the original column headers and ignoring lasttestY, then arranging by lasttestY to replicate the original table above.
+
+
+```{r}
+hiv.data %>% 
+  count(lasttestY, sex) %>%
+  spread(key = sex, value = n) %>%
+  gather(key = "sex", value = "n", -lasttestY) %>%
+  arrange(lasttestY)
+```
+
+###Incidence by category
+We can now explore the counts of seroco by different grouping variables
+
+```{r}
+hiv.data %>% 
+  count(seroco, sex) %>% #produces a count summary of seroco and sex
+  spread(key = seroco, value = n) %>% #converts from long to wide data frame
+  mutate(total = `0` + `1`, CumulativeIncidence = round((`1`/total)*100, 2))
+  
+```
+
+This time using a for loop and base R's table() function, binding all results into a list
+
+```{r}
+#select variables of interest
+v <- c("sex", "age2", "idu", "msm", "sexwork", "hete", "lasttestYgr", "centrocod")
+
+#To create the output table with seroconverters 
+output2 <- list()
+for (i in v) {
+  counts <- table(hiv.data[[i]], hiv.data$seroco)
+  #the ",1" in prop.table is to set that you want proportions for each row
+  proportions <- round(prop.table(counts,1)*100, digits = 2)
+  denominator <- rowSums(counts)
+  #Bind the columns of interest together, name them, and save them as a dataset in your list
+  output2[[i]] <- cbind(N = denominator, Seroconversions = counts[,2], CummulativeIncidence = proportions[,2])
+}
+
+output2
+```
+
+At this point, you know that you have information on 21,616 people, the majority of whom (58%) were male, with a mean age of 31.1 years (95% CI: 31.0-31.3). Information on transmission categories was available for all participants: 55% had unprotected heterosexual sex, 33% were men who had unprotected sexual relations with other men and almost 13% were injecting drug users. The majority of HIV tests (46.8%) were done between 2001 and 2004 at the centres in Madrid (40%). Among those attending, 752 (3.5%) seroconverted. Mean CD4 count was 642 cells per mm3, recall that a CD4 count <350 cells per mm3 within 91 days of HIV diagnosis indicates late diagnoses.  
+
+You may wish to discuss whether an HIV seroconversion incidence of 3.5% is high or not. In Spain, the estimated incidence of newly diagnosed HIV is 79.3 per one million inhabitants in 2009 . Recall that here we are presenting new infections in very specific groups at risk.
+
+
+
+#Linear regression 
+
+*Question 4:* How would you determine if age and sex are associated with the level of CD4 counts at seroconversion?  
+
+*Question 5:* What is the incidence of seroconversion overall and by the different characteristics?  
+
+##Help Questions 4-5 
+
+- investiage if age and sex are associated with CD4 count at seroconversion 
+
+You have already described the distribution of CD4 counts above using the summary command.
+
+###Visualising data
+The ggplot2 package is a powerful tool for data visualisation based on the 'grammar of graphics'. You create a plot using the function ggplot(), then add layers (also known as geoms) to the plot using "+". When you call ggplot() you need to provide your data frame as an argument. When you add a geom, you need to define the 'aesthetic mappings'. An aesthetic is a visual property of the objects in your plot. Aesthetics include things like the size, the shape, or the color of your points. More details can be found in the R for data science chapter and cheat sheet below.
+
+http://r4ds.had.co.nz/data-visualisation.html
+
+https://www.rstudio.com/wp-content/uploads/2015/03/ggplot2-cheatsheet.pdf
+
+
+```{r}
+#Describe and visualise the distribution of CD4
+ggplot(hiv.data) + geom_histogram(mapping = aes(x = cd4), binwidth = 50) + xlab("CD4 count (cells per mm3)")
+```
+
+
+###Linear regression: single variable
+**Is there a linear association between CD4 and age? Use plot and lm to investigate this.**
+
+
+```{r}
+a1 <- lm(cd4 ~ age, data = hiv.data)
+
+# This provides a summary of the linear regression model of a1 including the intercept and coefficient of age
+summary(a1)
+```
+```{r}
+# This provides a summary in table form
+tidy(a1, conf.int = TRUE)
+```
+
+```{r}
+#This creates a new data frame with the original data and the model values added
+a1aug <- augment(a1)
+```
+
+```{r}
+ggplot(a1aug) + 
+  geom_point(aes(x = age, y = cd4), alpha = 0.3) +
+  geom_line(aes(x = age, y = .fitted))
+```
+
+
+How do you interpret the intercept and the coefficient for age? What do the t-tests suggest?   
+What does the F-test tell you?  
+How much of the total variance in the CD4 counts can be explained by the model, i.e. by age? 
+
+The column of coefficients provides the values of b0 and b1 for the equation:   
+$Y_{predicted} = b0 + b1*x1$  
+In this case the regression equation is:  
+$CD4_{predicted}= 787 - 5 * age$  
+The intercept (787) is the predicted mean of the CD4 count when age is zero. Clearly, the intercept is not of direct interest in this model.  
+  
+The coefficient for age indicates the average amount of change in cd4 that would be predicted by a one unit increase in age. Here the unit for age is years. So, for every year increase in age, a 5 unit decrease in cd4 is predicted. 
+The t-tests in the output assess the null hypothesis "the true underlying coefficient of the corresponding row is equal to zero". For example, the null hypothesis in the "age row" is that b1=0 which would mean that age does not have any effect on the predicted CD4 count. However, the p-value for this test is small, so we tend to reject this null hypothesis and take b1=-5 as our best guess when we want to predict the impact of age on the CD4 count.
+By the same arguments, we reject the null hypothesis that the true intercept is equal to 0. However, this test is not meaningful as we are not interested in the average CD4 count of a newborn. This amount of extrapolation would go too far.  
+  
+The F-test is used to answer the question "Do the independent variables that I used in the model jointly explain enough of the variance in the dependent variable that it was worth fitting the model in the first place?" Note that here the F-test is an overall significance test, assessing whether a group of independent variables when used together explain any of the variance in the dependent variable. By default, the group of variables that the F-test in the output refers to is ALL the independent variables in the model. In our case, ALL the variables mean just the variable age which is why both the t-test for age and the F-test have the same p-value. This is not true anymore once sex and age are both included in the model - check it!  
+  
+R-squared is the proportion of variance in the dependent variable (here cd4) which can be explained by the independent/explanatory variables (here age). This value indicates that 12% of the variance in cd4 can be explained by the variable age. In general, if the R-squared value is high, then the p-value for the F-test will be small. 
+  
+    
+**Is there a difference in mean CD4 count between males and females?**  
+
+This question can be addressed using a t-test (a visual check of the assumptions of the ttest shows that CD4 counts are normall distributed and that the variances are similar between groups).  
+
+```{r}
+#means in CD4 by sex 
+t.test(hiv.data$cd4 ~ hiv.data$sex)
+```
+
+You can also do this using linear regression and get the mean difference between males and females for CD4 count. 
+
+```{r}
+# Linear relationship between CD4 count and sex
+
+a2 <- lm(cd4 ~ sex, data = hiv.data)
+summary(a2)
+```
+
+Notice the intercept is mean in group zero and the coefficient for sex is the difference in means
+
+###Linear regression: multi-variable
+
+**Construct a linear regression model including sex and age. How do you interpret the results?**  
+**Does this model describe the data better than the simple model?** 
+
+We can visualise the relationship between age, sex and cd4 counts by making a scatter plot and mapping sex to different colours
+
+```{r}
+ggplot(hiv.data, aes(x = age, y = cd4, colour = sex)) + geom_point(alpha = 0.5)
+```
+
+
+The linear regression for cd4 count, sex and age is as follows
+
+```{r}
+
+a3 <- lm(cd4 ~ sex + age, data = hiv.data)
+a3aug <- augment(a3)
+tidy(a3)
+
+```
+
+```{r}
+ggplot(a3aug) +
+  geom_point(aes(x = age, y = cd4, colour = sex), alpha = 0.5) +
+  geom_line(aes(x = age, y = .fitted, colour = sex))
+
+```
+
+
+You can then add a trendline to the same plot for sex and age to see how this shifts the gradient. 
+In this case the regression equation is:  
+$CD4_{predicted} = 693 + 173 *sex - 6 *age$
+As age is a binary variable, we get two regression lines, one for females (sex=0) and one for males (sex=1):  
+$females: CD4predicted = 693- 6 *age$  
+$males:   CD4predicted =  (693+173)- 6 *age$  
+
+These two regression lines are parallel, i.e. the slope is the same for both males and females. This is not a feature of the data but is specified by the model, i.e. we did not specify an interaction term for sex and age in the model, hence the predicted values of CD4 for males and females were indeed expected to be parallel. However, the intercept for males and females is different; the coefficient for sex corresponds to the difference in the intercepts.  
+As the new variable in the model appears to be significant you may consider keeping it in the model.  
+
+###Linear regression: interaction
+
+**Is there effect modification? Add an interaction term to the model. Plot the regression lines.**
+
+There is two ways to do this; one is to create a new variable by multiplying sex and age together, the second is to simply put this *interaction term* in your model. You can then add these trendlines to your previous plot to again see how this changes the gradient. 
+```{r}
+
+#create variable manually
+hiv.data$interact <- as.numeric(hiv.data$sex)*hiv.data$age #note need to make sex numeric instead of character
+
+#run regression with the manual variable 
+a4 <- lm(cd4~ sex + age + interact, data = hiv.data)
+
+#run regression by adding an interaction term to the model
+a5 <- lm(cd4 ~ sex + age + sex*age, data = hiv.data)
+
+tidy(a4)
+tidy(a5)
+
+```
+
+
+```{r}
+a5aug <- augment(a5)
+
+ggplot(a5aug) +
+  geom_point(aes(x = age, y = cd4, colour = sex), alpha = 0.5) +
+  geom_line(aes(x = age, y = .fitted, colour = sex))
+
+```
+
+
+
+The effect of age seems to be modified by sex, indicating that the slopes do differ between males and females (i.e. the lines indicating the predicted CD4 values by age are not parallel for males and females).  
+The intercept in the regression equation corresponds to the intercept for females (sex = 0) and for males it is 745+111=856, i.e. the coefficient for sex is the difference in the intercepts (that is, 856 - 745 = 111). Now that we have different slopes for males and females, the average difference between them is not constant anymore. Note that this value (111) represents the difference between males and females when age zero for both sexes (which makes little sense).   
+The coefficient for age is -8, corresponding to the slope for females (sex = 0). The coefficient for the interaction term is 2, corresponding to the difference in the slopes comparing males with females. The slope for males (sex=1)  is -8+2= -6.  
+So, for every year increase in age among females, a 8 unit decrease in cd4 is predicted; and for every year increase in age among males, a 6 unit increase in cd4 is predicted. 
+If these slopes were not significantly different, then you could specify a common slope for the groups by removing the interaction term.  
+It may be easier to understand this model if it is written as two equations, one equation for females and another for males:  
+$females:	CD4 = 745 - 8 *age$  
+$males:		CD4 = 856 - 6 *age$  
+
+This allows us to think in terms of the slopes for each group. However, building one single model with an interaction term allows us to test whether the age slope for males is significantly different from the slope for females, i.e. whether sex modifies the effect of age on cd4.  
+
+
+
+
+
+
+

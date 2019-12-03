@@ -1,0 +1,653 @@
+---
+title: Spanish Sentinel Surveillance System Factors associated with HIV infection
+  in Spain
+author: "Alexander Spina (AGES) and Patrick Keating (AGES)"
+date: "5 March 2017"
+output: 
+  html_document: 
+      theme: simplex
+      toc: yes
+      toc_depth: 4
+      toc_float:
+        collapsed: no
+        smooth_scroll: yes
+---
+
+**Contributors to *R* code:**  
+Niklas Willreich (RKI), Daniel Gardiner (PHE) Lukas Richter (AGES)
+
+2018 "Tidyverse" version by Ashley Sharp (PHE)
+
+The following code has been adapted to *R* for learning purposes. The initial contributors are listed below. All copyrights and licenses of the original document apply here as well. 
+
+**Authors:** 
+Alicia Barrasa, Costas Danis, Manuel Dehnert, Johannes Dreesman, Matthias an der Heiden, Harold Noel, Ioannis Karagiannis and David Prieto  
+
+**Reviewers:**  
+- 2013: Alicia Barrasa, Ioannis Karagiannis
+- 2014: Alicia Barrasa and Pawel Stefano
+
+**Short version:**
+- 2015: Alicia Barrasa, Ioannis Karagiannis and Andre Charlett
+- 2016: Alicia Barrasa and Ioannis Karagiannis
+
+
+#An introduction to the R companion#
+
+To understand computations in R, two slogans are helpful:
+
+- Everything that exists is an object.
+
+- Everything that happens is a function call.
+
+(John Chambers)
+
+If you look at the Global Environment panel (by default in the upper right of the screen) you will see a list of objects stored in that environment. When you load your data in R you create an object. This is completely separate from the data file itself (the excel file, or csv file etc). You can create as many objects as you like, for example you could store a few variables from your original data as a new object, or create a summary table and store that. 
+
+Functions in R are equivalent to commands in STATA. All functions take the form of a name followed by brackets e.g. functionname(). Inside the brackets go various arguments. You can access the help file for a function by calling ?functionname. The help file will show which arguments the function takes and what the function does. Arguments have a default order, as specified in the help file, though you can override this by specifying which argument you are entering using the equals sign "=".
+
+A good reference for R users is the book R for Data Science by Garrett Grolemund and Hadley Wickham. This is available free online at http://r4ds.had.co.nz/.
+
+###RStudio projects
+The easiest way to work with R is using RStudio 'projects'. RStudio is a graphical user interface that runs R in the background. A 'project' is an RStudio file that saves your workspace so you can easily pick up from where you left off. Put all the files that you will need for this case study in a folder called 'Copenhagen' and create a project in the same folder by clicking file -> new project -> existing directory, and choosing the folder. For simplicity, make sure there are no subfolders in this folder, and put all data and scripts in the main Copenhagen folder. 
+
+
+###Setting your working directory 
+Just as in STATA you can set a folder to be your working directory (using the setwd() command). Open the project that you've created and you will see that the working directory is the same as folder itself: you can check this by calling getwd().You can see what's in your working directory by looking at the **Files tab** (by default in the bottom right area of the screen). If you want to set your working directory manually you use the function setwd("C:/Users/yourname/Desktop/Copenhagen"). Note that R paths use forward slashes "/", while windows paths use back slashes "\\"  so if you copy a path from windows you have to change them manually.
+
+```{r, eval=F}
+getwd()
+
+# setwd("C:/Users/Spina/Desktop/MVA module 2016/Linear Regression")
+```
+
+###Installing packages and functions
+
+R packages are bundles of functions which extend the capability of R. Thousands of add-on packages are available in the main online repository (known as CRAN) and many more packages in development can be found on GitHub. They may be installed and updated over the Internet. Several packages come ready installed with R (base code). We will mainly use a combination of base R and a newer suite of packages collectively known as the 'tidyverse' www.tidyverse.org/, which share an underlying design philosophy, grammar, and data structures. You can install all the tidyverse packages with install.packages("tidyverse").
+
+You can install all the packages required for this case study using the code below. You only need to do this once.
+
+```{r, eval=FALSE, results='hide', message=FALSE, warning=FALSE}
+# Installing required packages for this case study
+required_packages <- c("foreign", "MASS", "multcomp", "broom", "Hmisc", "survival", "tidyverse", "skimr", "haven", "EpiStats", "lubridate") 
+install.packages(required_packages)
+```
+
+Run the following code at the beginning of the case study to make sure that you have made available all the packages that you need. Be sure to include it in any scripts too.  
+
+```{r, echo=TRUE, results='hide', message=FALSE, warning=FALSE}
+# Loading required packages for this case study
+required_packages <- c("foreign", "MASS", "multcomp", "broom", "Hmisc", "survival", "tidyverse", "skimr", "haven", "EpiStats", "lubridate") 
+
+#required_packages <- c("survival", "epiDisplay", "broom", "haven", "skimr", "EpiStats", "tidyverse")
+
+for (i in seq(along = required_packages))
+  library(required_packages[i], character.only = TRUE)
+
+```
+
+
+
+## Get familiar with your data and perform descriptive analysis
+
+Start a new R script, name it **poisson.r** and save it in your working directory.  
+
+Write all commands in the R script so that you can run (and re-run) it when 
+### Reading in datasets
+You can read in the Stata data set using the haven package and it's read_dta function. 
+
+```{r}
+#Read stata file
+hiv.data <- read_dta("HIV.dta")
+#Note this variables of the class 'labelled' in order to preserve stata labels for variables and values. Best to coerce into a standard R class e.g. character, factor, numeric. You can do this using parse_character etc from the package readr (equivalent to as.character). When working with other file formats such as .csv or .tsv files you can specify the how to parse the values as they are read in using col_*() in conjunction with a read_*() function. http://r4ds.had.co.nz/data-import.html
+
+hiv.data <- hiv.data %>% 
+  mutate(centro = parse_character(centro),
+         centrocod = parse_factor(centrocod, levels = 1:5, include_na = FALSE), 
+         hete = parse_character(hete),
+         idu = parse_character(idu), 
+         lasttestYgr = parse_factor(lasttestYgr, levels = 0:3, include_na = FALSE),
+         msm = parse_character(msm),
+         seroco = parse_factor(seroco, levels = c(0,1), include_na = FALSE),
+         sex = parse_character(sex),
+         sexwork = parse_character(sexwork),
+         id = parse_character(id),
+         dob = parse_date(dob),
+         first_pos = parse_date(first_pos),
+         first_test = parse_date(first_test),
+         last_neg = parse_date(last_neg),
+         age = parse_number(age),
+         age2 = parse_character(age2),
+         age4 = parse_character(age4),
+         age8 = parse_character(age8),
+         cd4 = parse_number(cd4),
+         lasttestY = parse_number(lasttestY))
+
+#Here we have parsed some values as factors. In R, factors are used to work with categorical variables, variables that have a fixed and known set of possible values. They are also useful when you want to display character vectors in a non-alphabetical order. We have defined all the possible values (levels) above. We have specified that missing (NA) values should not be treated as a factor level. The package readr forces you to be explicit when defining factors.
+
+```
+
+Familiarise yourself with the dataset
+```{r, eval=F}
+skim(hiv.data)
+#describe(hiv.data)
+#str(hiv.data)
+#summary(hiv.data)
+```
+
+
+##Univariable analysis
+**Question 1:** What are the main factors associated with HIV seroconversion? 
+
+
+**Help question 1**
+###cstable
+To measure the association between your outcome of interest, here seroconversion, and different dichotomous variables you can use the sva function (created by Daniel Gardiner C2015).  
+```{r}
+# List the variables of interest and use c() to combine the elements into a vector
+vars <- c("sex", "age2", "idu", "msm", "sexwork", "hete", "lasttestYgr", "centrocod")
+
+results <- cstable(as.data.frame(hiv.data), cases = "seroco", exposure = vars)
+results$df
+```
+
+For categorical variables with more than 2 categories (lasttestyr and centrocod) you could use a regression model including only one variable. You can use logistic regression to obtain ORs or binomial regression to obtain RRs.
+
+```{r}
+# Logistic regression for ORs
+# Create an empty list to store the output of your loop
+output <- list()
+
+# Loop over the 2 categorical variables with >2 categories
+for (var in c("lasttestYgr", "centrocod")) {
+
+# Define the formula to be used in the model and make each exposure variable a factor variable
+  
+    form <- formula(str_c("seroco ~", var))
+
+# Run your model
+    model <- glm(form, data = hiv.data, family = binomial(link = "logit"))
+    
+    output[[var]] <- tidy(model, exponentiate = TRUE, conf.int = TRUE) 
+}
+
+output$lasttestYgr
+output$centrocod
+```
+
+Perform the same analysis with binomial regression model
+```{r}
+#Binomial regression for RRs 
+output2 <- list()
+
+for (var in c("lasttestYgr", "centrocod")) {
+  
+  form <- formula(str_c("seroco ~", var))
+  
+  model <- glm(form, data = hiv.data, family = binomial(link = "log"))
+
+  output2[[var]] <- tidy(model, exponentiate = TRUE, conf.int = TRUE)
+}
+
+output2$lasttestYgr
+output2$centrocod
+```
+
+
+## Stratified analysis
+###csinter
+**Question 2:** Is the incidence of seroconversion by transmission categories different according to age and sex?
+
+**Help question 2**
+For this we can use the csinter functions from the EpiStats package (developed by Jean Pierre Decorps and Esther Kissling from Epiconcept). 
+
+```{r}
+#Note: currently EpiStats requires that you first convert from tibble to traditional data frame using as.data.frame(), and convert from factor to numeric variables using parse_number()
+vars <- c("idu", "msm", "sexwork", "hete", "age2", "sex")
+
+hiv.data.numeric <- as.data.frame(hiv.data %>% mutate_at(c(vars, "seroco"), .funs = funs(parse_number)))
+
+```
+
+Here we show only the line of commands for the stratification by age2.
+```{r}
+vars <- c("idu", "msm", "sexwork", "hete")
+
+output3 <- list()
+
+for(var in vars){
+  output3[[var]] <- csinter(hiv.data.numeric, "seroco", var, by = "age2")
+}
+
+output3$idu$df1
+output3$msm$df1
+output3$sexwork$df1
+output3$hete$df1
+```
+
+Now, stratify by exposure to sex
+```{r}
+vars <- c("idu", "sexwork", "hete")
+
+output4 <- list()
+
+#results <- csinter(hiv.data.numeric, "seroco", "msm", by = "sex")
+
+for(var in vars){
+  output4[[var]] <- csinter(hiv.data.numeric, "seroco", var, by = "sex")
+}
+
+output4$idu$df1
+output4$sexwork$df1
+output4$hete$df1
+```
+
+#Poisson regression - Negative binomial regression
+
+By this point, you have already compared the risks of seroconversion for different exposures and you know which groups within your population have the highest risk of seroconversion.
+
+So far, you know that sex, age, the different modes of transmission, the year when the test was performed, and the centre region are associated with HIV seroconversion. You have also seen when performing stratified analysis that some of these variables have an impact on the effect of the others. In order to investigate several risk factors simultaneously and assess for confounding and effect modification, you need to undertake multivariable analysis.
+
+Seroconversion is your event of interest, and, as you remember, seroconverters are defined as persons with a recorded HIV-negative test followed by a positive one. Since you have the dates for the different tests, the most appropriate indicator would be the rate of seroconversion and it will be best modelled by Poisson regression. 
+
+Incidence rate (or incidence density) is the incident cases divided by the person-time at risk. In this specific sentinel surveillance system, the numerator is the seroconverters, and the denominator is the total person-time at risk (i.e. the time between the first HIV test (by definition negative in this database) and the first HIV positive test for seroconverters, or the time between the first HIV test and the last HIV negative test for non-seroconverters).
+
+**Question 3:** How would you identify the independent risk factors associated with the rate of HIV seroconversion 
+
+**Help question 3:**  
+- Calculate the person-time at risk by generating the corresponding variable denom for each observation:
+
+```{r}
+# Seroco needs to be a numeric variable for this part of the analysis so that we can sum the number of 1's
+hiv.data <- hiv.data %>% mutate(seroco = parse_number(seroco))
+```
+
+##lubridate
+
+We need to create denominators of person-time at risk. For those who did not seroconvert, this is the difference in time between the first test and the last negative. For those that did seroconvert, this is the difference in time between the first test and the first positive.
+
+In dealing with times and dates we can use the lubridate package. http://r4ds.had.co.nz/dates-and-times.html
+
+There are three important classes that represent time spans:
+
+
+- durations, which represent an exact number of seconds
+
+- periods, which represent human units like weeks and months
+
+- intervals, which represent a starting and ending point
+
+http://r4ds.had.co.nz/dates-and-times.html#time-spans
+
+We will create durations using as.duration() and divide by the numbers of seconds in a year (ddays(365.25)) to calculate the number of years.
+
+```{r}
+#Create denominator where seroco == 0 and where seroco == 1
+hiv.data <- hiv.data %>% 
+  mutate(denom = case_when(
+  seroco == "0" ~ as.duration(last_neg - first_test)/ddays(365.25),
+  seroco == "1" ~ as.duration(first_pos - first_test)/ddays(365.25)
+))
+```
+
+We can then group by sex, idu, msm, sexwork and age2 and summarise the sum of seroconversions (equivalent to the count) and sum of denominator for each group.
+
+```{r}
+hiv.data.sum <- hiv.data %>% 
+  group_by(sex, idu, msm, sexwork, age2) %>% 
+  summarise(seroco = sum(seroco), denom = sum(denom)) %>%
+  ungroup()
+hiv.data.sum
+```
+
+To look at a single variable we can summarise hiv.data.sum further using only one grouping variable. We can calculate the incidence rate by dividing seroco by the denominator and multiplying by for example 100 to get incidence per 100 person-years.
+
+```{r}
+idu <- hiv.data.sum %>% 
+  group_by(idu) %>% 
+  summarise(seroco = sum(seroco), denom = sum(denom)) %>%
+  mutate(incidence_100 = seroco/denom*100)
+idu
+```
+
+We can then calculate the incidence rate ratio by dividing incidence where idu == "1" by incidence where idu == "0"
+```{r}
+idu$incidence_100[2]/idu$incidence_100[1]
+```
+
+##epi.2by2
+
+the epi.2by2 from the package epiR function can produce two by two tables where the denominator is person-time at risk by selecting method = "cohort.time" allowing us to calculate incidence rates and incidence rate ratios. 
+
+Note: cstable (used above) can currently only calculate attack rates (also known as incidence proportion/cumulative incidence) where the denominator is the population at the start of the time interval.
+
+To use epi.2by2 we need to format the data in a specific way. 
+```{r}
+#We first set the factor levels so that "1" is before "0" so that the divisions are performed the correct way round.
+hiv.data.sum <- hiv.data.sum %>% mutate(
+  idu = parse_factor(idu, levels = c("1", "0"), include_na = FALSE),
+  msm = parse_factor(msm, levels = c("1", "0"), include_na = FALSE),
+  sexwork = parse_factor(sexwork, levels = c("1", "0"), include_na = FALSE),
+  age2 = parse_factor(age2, levels = c("1", "0"), include_na = FALSE),
+  sex = parse_factor(sex, levels = c("1", "0"), include_na = FALSE))
+
+```
+
+```{r warning=FALSE}
+# Aggregate the hiv.data.sum data set by seroco and denom only
+a <- hiv.data.sum %>%
+  group_by(idu) %>%
+  summarise(seroco = sum(seroco), denom = sum(denom))
+
+#Create a matrix out of the aggregated data
+a <- data.matrix(a[,c("seroco","denom")])
+
+# Convert the matrix to a data table
+dat <- as.table(matrix(a, nrow = 2))
+
+# Apply the epi.2by2 function to the data table
+ir <- epi.2by2(dat, method = "cohort.time") #compute irr using epi2by2
+ir
+
+```
+
+Repeat the above for all variables by using a loop
+
+```{r, warning = FALSE, message = FALSE}
+output5 <- list()
+
+vars <- c("idu", "msm", "sexwork", "age2", "sex")
+
+for (var in vars) {
+  form <- formula(paste0("cbind(seroco, denom) ~ ",var))
+  a <- aggregate(form, FUN = sum, data = hiv.data.sum)
+  a <- data.matrix(a[,c("seroco","denom")])
+  dat <- as.table(matrix(a, nrow = 2))
+  ir <- epi.2by2(dat, method = "cohort.time")
+  output5[[var]] <- ir$massoc$IRR.strata.wald
+}
+
+output5
+```
+
+
+
+## Simple Poisson regression. 
+
+For poisson regression, we will use the glm function with a poisson family and log link (as below).  
+```{r}
+# Need to change your variables to integers instead of factors for poisson regression
+vars <- c("idu", "msm", "sexwork", "age2", "sex")
+
+hiv.data.sum <- hiv.data.sum %>% mutate_at(vars, .funs = funs(parse_number))
+
+# Run regression including idu as exposure variable
+model1 <- glm(seroco ~ idu , 
+              family = poisson(link = "log"), 
+              data = hiv.data.sum, offset = log(denom))
+
+model1op <- tidy(model1, exponentiate = TRUE, conf.int = TRUE)
+model1op
+```
+
+
+Multivariable Poisson model 
+```{r, message= FALSE, warning= FALSE}
+model1 <- glm(seroco ~ sex + age2 + sexwork, 
+              family = poisson(link = "log"), 
+              data = hiv.data.sum, offset = log(denom))
+
+model1op <-tidy(model1, exponentiate = TRUE, conf.int = TRUE)
+model1op
+
+
+model2 <- update(model1, formula = seroco ~ sex + age2 + idu)
+model2op <-tidy(model2, exponentiate = TRUE, conf.int = TRUE)
+model2op
+
+
+model123 <- update(model2, formula = seroco ~ sex + age2 + sexwork + idu + msm)
+model123op <-tidy(model123, exponentiate = TRUE, conf.int = TRUE)
+model123op
+
+
+model12 <- update(model2, formula = seroco ~ sex + age2 + sexwork + idu)
+model12op <- tidy(model12, exponentiate = TRUE, conf.int = TRUE)
+model12op
+
+
+model13 <- update(model1, formula = seroco ~ sex + age2 + sexwork + msm)
+model13op <- tidy(model13, exponentiate = TRUE, conf.int = TRUE)
+model13op
+
+model23 <- update(model2, formula = seroco ~ sex + age2 + idu + msm)
+model23op <- tidy(model23, exponentiate = TRUE, conf.int = TRUE)
+model23op
+
+
+model12sex3 <- update(model2, formula = seroco ~ age2 + sexwork + idu*sex + msm)
+model12sex3op <- tidy(model12sex3, exponentiate = TRUE, conf.int = TRUE)
+model12sex3op
+
+AIC(model1, model2, model123, model12, model13, model23, model12sex3)
+```
+
+- Check for overdispersion. -
+A model exhibits overdispersion when the variance is larger than the mean.To verify graphically whether the variance is equal or not to the mean, you can use the commands summarize and histogram.
+
+```{r}
+ggplot(hiv.data.sum) + geom_histogram(aes(x = seroco), binwidth = 5, fill = "red")
+```
+
+```{r}
+#look at descriptive statistics 
+summary(hiv.data.sum$seroco)
+```
+
+
+**Optional:**
+It is possible to graphically examine the fit between the observed and predicted data
+
+```{r}
+
+ggplot(hiv.data.sum) + 
+  geom_histogram(aes(x = seroco), binwidth = 5, fill = "red") +
+  geom_histogram(aes(x = model12sex3$fitted.values), binwidth = 5, fill = "blue")
+  
+```
+
+
+```{r}
+#Measures of dispersion 
+Deviance <- model12sex3$deviance / model12sex3$df.residual
+Deviance
+
+Pearson <- sum(residuals(model12sex3, type = "pearson")^2) / model12sex3$df.residual
+Pearson
+```
+
+#Correct for overdispersion by running alternative models
+
+## Quasi-poisson
+In this example, using a negative binomial corrects the overdispersion and allows a more precise estimation
+```{r}
+#Quasi-poisson (equivalent results to square root of Pearson chi-squared based dispersion)
+    #http://data.princeton.edu/wws509/r/overdispersion.html under 4.a.1 Extra-poisson variation
+model12sex3quasi <- glm(seroco ~ age2 + sexwork + idu*sex + msm, family = quasipoisson(link = "log"), data = hiv.data.sum, offset = log(denom))
+model12sex3quasiop <- tidy(model12sex3quasi, exponentiate = TRUE, conf.int = TRUE)
+model12sex3quasiop
+```
+To compensate for the manifest overdispersion, the standard errors were multiplied by the square root of the Pearson ??2-based dispersion parameter. Note that, as a result, the p-values rise, the CIs widen
+
+
+## Negative binomial regression
+The negative binomial regression includes an extra parameter that allows testing and compensating for overdispersion
+```{r}
+#in negbin you have to add offset to the model (cant do seperately)
+model12sex3nb <- glm.nb(seroco ~ age2 + sexwork + idu*sex + msm + offset(log(denom)), data = hiv.data.sum)
+model12sex3nbop <- tidy(model12sex3nb, exponentiate = TRUE, conf.int = TRUE)
+model12sex3nbop
+
+
+Pearson2 <- sum(residuals(model12sex3nb, type = "pearson")^2) / model12sex3nb$df.residual
+Pearson2
+```
+
+
+The RR for male intravenous drug user can be determined using a linear combination of estimators.
+```{r}
+#Interaction term (lincom)
+interactiontest <- summary(glht(model12sex3nb, linfct = c("idu:sex = 0")))
+ci <- confint(interactiontest) 
+# Put together the table with the exponent of the coefficients and CI, and p value
+interactiontesttab <- round(cbind(OR = exp(coef(interactiontest)), 
+                                   Interval = exp(ci$confint),
+                                   Pvalue = interactiontest$test$pvalues),digits = 3)
+
+interactiontesttab
+```
+
+
+  
+
+#Survival Analysis (Cox Regression) 
+
+When study designs include follow-up, or the evolution of some characteristics, time is a key variable for the analysis (i.e. cohort studies). Together with Poisson regression, Cox regression is usually the multivariable analysis method of choice, allowing the estimation of rate ratios, expressed as hazard ratios.
+
+Whereas in Poisson regression the dependent variable is counts, and there is a "constant hazard" assumption i.e. the incidence is the same over time for a particular pattern of exposure variables, in Cox regression the variable of interest is the time to events , between a defined starting point and  the event of interest (failure), or the end of observation if no event occurred (censored). Cox regression avoids the "constant hazards" assumption, allowing the baseline hazard to change over time, which is often more appropriate.  
+
+We already defined the event of interest as HIV seroconversion and the time to event , the period between the first negative HIV tests and the last negative (censored) or first positive HIV test ("failure") in each individual (denom). 
+
+Cox regression is mathematically different from logistic regression, however, basic concepts, interpretation of parameters and procedures for model building are similar.
+
+**Question 4:** How would you identify the independent factors associated with the rate of HIV seroconversion by using a time to event analysis?  
+
+**Help question 4**
+
+**Declare your data to be survival-time data** 
+
+Before performing Cox regression, you have to declar your datta to be survival-time data. This will allow R to identify key variables and their roles in a survival time analysis. 
+
+This can be achieved using the Surv() function from the survival package. This requires you to use the case based dataset and not the aggregated one. 
+
+
+```{r}
+#Add a variable to your dataset which is survival time
+      #NEED TO GO BACK TO CASE BASED DATASET!
+hiv.data$SurvObj <- with(hiv.data, Surv(denom, seroco))
+```
+
+
+**Graph the Kaplan-Meier survival function for the different exposures** 
+
+By using the survfit function you can plot a Kaplan-Meier survival curve, in this situation it helps to first look at the overall plot. 
+
+```{r}
+
+#to plot an overall fit 
+km.overall <- survfit(SurvObj ~ 1, data = hiv.data)
+plot(km.overall)
+
+```
+
+
+After this you can look at each of the variables individually. 
+
+
+```{r}
+#to plot for different variables 
+vars <- c("sex", "idu", "sexwork", "hete")
+
+kmoutputs <- list()
+for (var in vars) {
+  form <- formula(paste0("SurvObj ~", var))
+  kmoutputs[[var]] <- survfit(form, data = hiv.data)
+  plot(kmoutputs[[var]], main = var)
+}
+```
+
+You can use the survdiff function to run a log rank test.  
+
+```{r}
+#to do a logrank test comparing expected number of events vs observed for each variable
+logrankoutputs <- list()
+
+for (var in vars) {
+  form <- formula(paste0("SurvObj ~", var))
+  logrankoutputs[[var]] <- survdiff(form, data = hiv.data)
+}
+```
+
+
+The log-rank test compares the expected number of events if the "survival" functions were equal to that observed. Here it is clear that we observe far many more seroconversions in the males than we would expect. The p-value indicates that the two survival functions are significantly different.  
+
+**Build a model which includes all relevant variables**
+
+Variables to be included in a multivariable Cox regression are selected, as for all the multivariable techniques, on the basis of the crude analysis. 
+So we start by introducing one variable at a time using the coxph() function. 
+
+```{r}
+cox.model1 <- coxph(SurvObj ~ idu, data = hiv.data)
+tidy(cox.model1, exponentiate = T)
+```
+
+The hazard ratio for seroconversion is 3.6 times higher in idu than in non idu. Alternatively you could write it as: being an IDU was associated with a significantly higher rate of HIV seroconversion (HR: 3.6, 95% CI: 3.1-3.2)  
+  
+You can try now with the rest of your variables  
+  
+You control for potential confoundingand effect modification in Cox models by including the exposure of interest,  the potential confounding variables and interaction terms as you would do with other multivariable models.   
+  
+You could add variables step by step or alternatively start with a full model and remove variables one by one. Here we show the latter  
+
+
+```{r}
+#In order to change the reference group you need to use the relevel function
+hiv.data$centrocod2 <- relevel(factor(hiv.data$centrocod), ref = 2)
+
+#Run your various regressions and use ANOVA to run a likelihood ratio test
+cox.model3 <- coxph(SurvObj ~ idu + msm + sexwork + age + centrocod2 + sex, 
+                   data = hiv.data)
+tidy(cox.model3, exponentiate = T)
+
+cox.model4 <- update(cox.model3, formula = SurvObj ~ idu + msm + sexwork + age + centrocod2)
+
+anova(cox.model3, cox.model4)
+
+```
+
+
+Finally, you should be able to include an interaction term. 
+
+**Assess the proportional hazards assumption using the cox.zph function**
+
+
+```{r}
+
+cox.model5 <- coxph(SurvObj ~ idu*msm + age + centrocod, 
+                    data = hiv.data)
+
+# test of proportional hazard assumption
+cox.zph(cox.model5)
+```
+
+There is no strong evidence to suggest that the hazards are not proportional although for some of the centres the assessment indicates the assumption is slightly dubious but not so bad as to consider the assumption is violated.
+
+
+##Summary
+The HIV sentinel surveillance system developed in Spain enabled in-depth analysis of factors associated with HIV infection risk in the Spanish high-risk population. Based on this system, interventions can be better planned to reduce risk in this population.  
+
+Data included in the used dataset were based on this Sentinel Surveillance system between 1989-2004, although they were modified for pedagogical proposes; they give us information on 21,616 visits, mostly of males (58%), with a mean age of 31.1 years. Of those who had the information on HIV transmission category recorded, 55% reported unprotected heterosexual sex, 33% were men who had unprotected sexual relations with other men and almost 13% were injecting drug users.  
+
+The incidence of seroconversions during 1989-2004 was 3.5%. The univariable analysis revealed that seroconversions were more frequent among males and that their frequency decreased with age. Injecting drugs use and being MSM seemed to increase the risk of seroconversion, having unprotected heterosexual sex and being a sex worker seemed to decrease this risk. Regional differences in seroconversion rates were also observed. Thus, if we had stopped our analysis at that step, only interpreting univariate associations, this could have led us to the wrong conclusions.  
+
+The stratified analysis indicated that there were several interactions between analysed variables. For example, the odds of seroconversion was 9 times higher among female IDUs compared to male IDUs and older MSMs had higher odds of seroconversion compared to younger MSMs. Thus, we decided to go for multivariable analysis as the observed interactions would be very difficult to disentangle by stratified analysis at the same time.  
+
+We then fitted a logistic regression model to identify factors independently associated with seroconversion during 1989-2004. The factors related to increased chances of seroconversion were: sex, injection drug use, being MSM, regional centre outside the North Region. Increasing age was associated with decreased chances of seroconversion. A strong interaction between sex and injection drug use was included in the model.  
+
+In this particular example where incidence can be calculated, Poisson regression or negative binomial regression are the recommended alternatives to logistic regression since these techniques enable the modelling of risk ratios. Though RR were lower than OR, the obtained results do not modify our conclusions considerably.  
+
+To identify factors that could change in time, or to take into account the time of follow up, as in cohort studies, you can use again Poisson regression or negative binomial regression setting the time variable as an offset.  
+
+Survival analysis can be also used in cohort studies, though its interpretation refers to the time it takes for an event to occur.  
+
+
